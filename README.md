@@ -65,33 +65,49 @@ Efesto/
 
 ---
 
-## Avvio
+## Installazione
 
 ### Prerequisiti
 
-- [Ollama](https://ollama.com) installato e avviato
-- Python 3.9+
-- Node.js 18+
+Assicurati di avere installato:
 
-Modelli consigliati da scaricare prima:
+- [Ollama](https://ollama.com) — runtime per i modelli locali
+- **Python 3.9+** — `python3 --version`
+- **Node.js 18+** — `node --version`
+
+### 1. Clona il repository
 
 ```bash
-ollama pull qwen3.5:9b          # o qualsiasi modello con tool calling
-ollama pull qwen3-embedding:4b  # modello di embedding (default)
+git clone https://github.com/MarcoSalmaso/Efesto.git
+cd Efesto
 ```
 
-### Backend
+### 2. Scarica i modelli Ollama
+
+Efesto ha bisogno di almeno un modello per la chat e uno per gli embedding:
+
+```bash
+ollama pull qwen3.5:9b          # modello chat con tool calling (consigliato)
+ollama pull qwen3-embedding:4b  # modello di embedding per il RAG (default)
+```
+
+Puoi usare qualsiasi modello Ollama con supporto al tool calling (es. `llama3.1:8b`, `gemma4`). Il modello di embedding è configurabile dalle impostazioni.
+
+### 3. Avvia il backend
 
 ```bash
 cd backend
 python3 -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
 uvicorn app.main:app --reload --port 8006
 ```
 
-### Frontend
+Al primo avvio vengono creati automaticamente il database SQLite (`efesto.db`) e la cartella per i vettori LanceDB (`storage/vectors/`).
+
+### 4. Avvia il frontend
+
+In un secondo terminale:
 
 ```bash
 cd frontend
@@ -99,7 +115,19 @@ npm install
 npm run dev
 ```
 
-L'interfaccia è disponibile su `http://localhost:5173`.
+Apri il browser su **`http://localhost:5173`**.
+
+### Avvii successivi
+
+Una volta completata l'installazione, per riavviare basta:
+
+```bash
+# Terminale 1 — backend
+cd backend && source venv/bin/activate && uvicorn app.main:app --reload --port 8006
+
+# Terminale 2 — frontend
+cd frontend && npm run dev
+```
 
 ---
 
