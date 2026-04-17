@@ -162,7 +162,6 @@ async def upload_knowledge(file: UploadFile = File(...)):
     total = len(chunks)
 
     async def event_stream():
-        table = rag_manager.db.open_table("knowledge")
         loop = asyncio.get_event_loop()
         batch_size = rag_manager.batch_size
         try:
@@ -170,6 +169,13 @@ async def upload_knowledge(file: UploadFile = File(...)):
             for batch_start in range(0, total, batch_size):
                 batch = chunks[batch_start:batch_start + batch_size]
                 embeddings = await loop.run_in_executor(None, rag_manager._get_embeddings_batch, batch)
+
+                if batch_start == 0:
+                    # Detect actual embedding dim and validate/create table
+                    dim = len(embeddings[0])
+                    rag_manager.ensure_table_with_dim(dim)
+
+                table = rag_manager.db.open_table("knowledge")
                 rows = []
                 for i, (chunk, embedding) in enumerate(zip(batch, embeddings)):
                     meta = {"filename": filename, "source": "upload",

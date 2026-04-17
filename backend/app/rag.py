@@ -10,13 +10,12 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STORAGE_PATH = os.path.join(BASE_DIR, "storage", "vectors")
 os.makedirs(STORAGE_PATH, exist_ok=True)
 
-EMBEDDING_DIM = 2560
-
-SCHEMA = pa.schema([
-    pa.field("vector", pa.list_(pa.float32(), EMBEDDING_DIM)),
-    pa.field("text", pa.string()),
-    pa.field("metadata", pa.string()),
-])
+def _make_schema(dim: int) -> pa.Schema:
+    return pa.schema([
+        pa.field("vector", pa.list_(pa.float32(), dim)),
+        pa.field("text", pa.string()),
+        pa.field("metadata", pa.string()),
+    ])
 
 class RagManager:
     def __init__(self, db_path: str = STORAGE_PATH):
@@ -46,18 +45,42 @@ class RagManager:
         except Exception:
             return False
 
+    def _get_table_dim(self) -> int:
+        """Returns the vector dimension of the existing table, or 0 if absent."""
+        try:
+            table = self.db.open_table("knowledge")
+            return table.schema.field("vector").type.list_size
+        except Exception:
+            return 0
+
     def _ensure_table(self):
         needs_create = "knowledge" not in self.db.table_names()
         if not needs_create and not self._schema_is_valid():
             self.db.drop_table("knowledge")
             needs_create = True
         if needs_create:
-            self.db.create_table("knowledge", schema=SCHEMA)
+            # Use a placeholder dim=1; the real table will be created on first upload.
+            pass
+
+    def ensure_table_with_dim(self, dim: int):
+        """Create table if missing, or raise if existing dim mismatches."""
+        if "knowledge" not in self.db.table_names():
+            self.db.create_table("knowledge", schema=_make_schema(dim))
+            return
+        if not self._schema_is_valid():
+            self.db.drop_table("knowledge")
+            self.db.create_table("knowledge", schema=_make_schema(dim))
+            return
+        existing_dim = self._get_table_dim()
+        if existing_dim != dim:
+            raise ValueError(
+                f"Dimensione embedding incompatibile: la Knowledge Base usa vettori da {existing_dim} dimensioni, "
+                f"il modello attuale produce {dim}. Svuota la Knowledge Base prima di cambiare modello di embedding."
+            )
 
     def reset_table(self):
         if "knowledge" in self.db.table_names():
             self.db.drop_table("knowledge")
-        self._ensure_table()
 
     def _get_embedding(self, text: str) -> List[float]:
         response = ollama.embeddings(model=self.embedding_model, prompt=text)
@@ -113,6 +136,8 @@ class RagManager:
         table.add(rows)
 
     def search(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        if "knowledge" not in self.db.table_names():
+            return []
         query_embedding = self._get_embedding(query)
         table = self.db.open_table("knowledge")
         results = table.search(query_embedding).limit(limit).to_list()
