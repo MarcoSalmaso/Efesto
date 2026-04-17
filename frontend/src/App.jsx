@@ -85,6 +85,12 @@ const App = () => {
     }
   }, [activeTab]);
 
+  useEffect(() => {
+    if (models.length > 0 && settings.rag_embedding_model && !models.includes(settings.rag_embedding_model)) {
+      setSettings(s => ({ ...s, rag_embedding_model: models[0] }));
+    }
+  }, [models]);
+
   const fetchModels = async () => {
     try {
       const res = await axios.get(`${API_BASE}/ollama/list`);
