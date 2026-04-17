@@ -1,89 +1,115 @@
-# Efesto - Local AI Tool Environment
+# Efesto — Local AI Workbench
 
-Efesto è un ambiente locale progettato per potenziare i modelli di intelligenza artificiale (LLM) attraverso l'integrazione di strumenti, memorie e protocolli di contesto. L'obiettivo è centralizzare la gestione degli agenti AI, fornendo loro un set di strumenti estensibile e una memoria persistente, il tutto gestito tramite un'interfaccia web intuitiva.
-
-## 🎯 Obiettivi del Progetto
-- **Local-First:** Esecuzione di modelli locali (tramite Ollama, LocalAI o simili).
-- **Centralizzazione:** Database SQLite unico per configurazioni, memorie, log e prompt.
-- **Scalabilità:** Architettura modulare a plugin per aggiungere nuovi strumenti senza riscrivere il core.
-- **Interfaccia Visuale:** Dashboard web per monitorare e configurare l'ambiente.
-- **Supporto MCP:** Integrazione nativa del Model Context Protocol.
-
-## 🏗️ Architettura Proposta
-
-### Backend (Python/FastAPI)
-Ho scelto Python per la sua vasta libreria di integrazioni AI (LangChain, LlamaIndex, Ollama-python).
-- **Core Engine:** Gestisce il ciclo di vita delle richieste e l'orchestrazione dei tool.
-- **Tool Registry:** Un sistema dinamico dove ogni nuovo tool viene registrato e reso disponibile ai modelli.
-- **Database Layer:** SQLAlchemy/SQLModel con SQLite per la persistenza.
-
-### Frontend (React + Tailwind)
-Un'interfaccia moderna per gestire:
-- Configurazione dei Modelli.
-- Editor di Prompt con versioning.
-- Esploratore della Memoria (Vettoriale e Relazionale).
-- Logs delle interazioni in tempo reale.
-
-### Database Schema (SQLite)
-- `models`: Configurazione dei modelli locali disponibili.
-- `prompts`: Libreria di prompt di sistema e template.
-- `memories`: Memoria a lungo termine (con supporto a embedding via SQLite-vss).
-- `tools`: Configurazione e permessi degli strumenti abilitati.
-- `conversations`: Storico delle chat e degli input/output degli strumenti.
-
-## 🛠️ Proposte di Strumenti (Tools) per gli LLM
-
-Per rendere Efesto veramente utile, ecco alcuni strumenti che i modelli potranno utilizzare:
-
-1.  **File System Tool:** Leggere/Scrivere file in directory sicure (sandbox).
-2.  **MCP Connector:** Bridge verso server MCP esterni (Google Drive, GitHub, Slack).
-3.  **Local Python Interpreter:** Esecuzione di script Python per calcoli complessi o analisi dati.
-4.  **Web Search (Local):** Ricerca web tramite istanze locali di SearXNG.
-5.  **Memory Search:** Accesso alla base di conoscenza personale salvata nel database.
-6.  **Database Query Tool:** Capacità di interrogare tabelle specifiche di SQLite per estrarre dati strutturati.
-7.  **Task Manager:** Creazione e gestione di TODO/Calendario locali.
-
-## 📅 Roadmap di Sviluppo
-
-### Fase 1: Fondamenta (Core & DB)
-- [ ] Setup del progetto Python e database SQLite.
-- [ ] Implementazione del Tool Registry di base.
-- [ ] Integrazione iniziale con Ollama.
-
-### Fase 2: Integrazione Strumenti & MCP
-- [ ] Supporto per il protocollo MCP.
-- [ ] Sviluppo dei primi 3 tool (File System, Python, Memory).
-- [ ] Sistema di gestione dei prompt (CRUD).
-
-### Fase 3: Interfaccia Web
-- [ ] Sviluppo della Dashboard in React.
-- [ ] Visualizzazione dei log e delle chiamate ai tool.
-- [ ] Pannello di configurazione per i modelli.
-
-### Fase 4: Memoria Avanzata
-- [ ] Implementazione di RAG (Retrieval Augmented Generation) locale.
-- [ ] Utilizzo di SQLite-vss per la ricerca vettoriale nella memoria.
+Efesto è un'applicazione **local-first** per interagire con modelli AI locali (via Ollama) dotata di RAG, tool calling, streaming delle risposte e un'interfaccia web moderna. Tutto gira sulla tua macchina, senza dipendenze da cloud esterni.
 
 ---
-*Efesto - Costruisci il tuo Olimpo Digitale.*
 
+## Funzionalità
 
-Per chiudere e riavviare l'applicazione, segui questi passaggi a seconda di come l'hai avviata:
+- **Chat con streaming** — risposte in tempo reale con supporto al _thinking_ (chain-of-thought) dei modelli che lo supportano
+- **Tool calling** — il modello può invocare strumenti autonomamente durante la conversazione; le chiamate sono visibili in chat come tag
+- **RAG locale** — carica documenti (PDF, DOCX, TXT, MD, CSV, JSON, HTML) nella Knowledge Base; vengono suddivisi in chunk, embeddati con un modello Ollama e cercati semanticamente via LanceDB
+- **Knowledge Base** — gestione documenti con upload multi-formato, progress dell'embedding chunk-by-chunk, eliminazione per file e reset completo
+- **Sessioni persistenti** — le conversazioni sono salvate in SQLite e ricaricabili dalla sidebar
+- **Rendering Markdown + LaTeX** — le risposte supportano GFM, syntax highlighting e formule matematiche (KaTeX)
+- **Impostazioni configurabili** — system prompt, lunghezza contesto, modello di embedding, max chunk length, embedding batch size, top-k retrieval
 
-  1. Come chiudere l'applicazione
-  Se l'applicazione è in esecuzione nel tuo terminale, il comando standard per interromperla è:
-   * Ctrl + C (sia per il backend che per il frontend).
+---
 
-  Se hai avviato i processi separatamente, dovrai farlo in entrambi i terminali.
+## Stack
 
-  2. Come riavviarla
-  Per far ripartire tutto, apri due terminali (o usa due tab) ed esegui:
+| Layer | Tecnologie |
+|---|---|
+| Backend | Python 3.9+, FastAPI, SQLModel, Ollama SDK, LanceDB, PyArrow |
+| Frontend | React 18, Vite, Tailwind CSS, Axios, react-markdown, KaTeX |
+| Database | SQLite (chat e config), LanceDB (vettori embedding) |
+| AI | Ollama (modelli locali), embedding con `ollama.embed()` batch API |
 
-  Per il Backend (Python/FastAPI):
-   1 cd backend
-   2 source venv/bin/activate
-   3 uvicorn app.main:app --reload
+### Strumenti disponibili per il modello
 
-  Per il Frontend (React/Vite):
-   1 cd frontend
-   2 npm run dev
+| Tool | Descrizione |
+|---|---|
+| `search_knowledge` | Ricerca semantica nella Knowledge Base RAG |
+| `read_file` | Legge file di testo dal filesystem locale |
+| `execute_python` | Esegue codice Python in un subprocess isolato (timeout 10s) |
+
+---
+
+## Struttura del progetto
+
+```
+Efesto/
+├── backend/
+│   ├── app/
+│   │   ├── main.py          # FastAPI app, endpoints, chat streaming
+│   │   ├── models.py        # Schema SQLite (SQLModel)
+│   │   ├── rag.py           # RagManager: chunking, embedding, ricerca LanceDB
+│   │   ├── extractors.py    # Estrazione testo da PDF, DOCX, CSV, JSON, HTML
+│   │   └── tools/
+│   │       ├── base.py      # Classe astratta BaseTool
+│   │       ├── registry.py  # ToolRegistry globale
+│   │       ├── rag_search.py
+│   │       ├── file_reader.py
+│   │       └── python_executor.py
+│   ├── storage/vectors/     # Database vettoriale LanceDB (gitignored)
+│   ├── efesto.db            # SQLite (gitignored)
+│   └── requirements.txt
+└── frontend/
+    ├── src/
+    │   ├── App.jsx          # Componente React principale
+    │   ├── main.jsx
+    │   └── index.css
+    ├── package.json
+    └── tailwind.config.js
+```
+
+---
+
+## Avvio
+
+### Prerequisiti
+
+- [Ollama](https://ollama.com) installato e avviato
+- Python 3.9+
+- Node.js 18+
+
+Modelli consigliati da scaricare prima:
+
+```bash
+ollama pull qwen3.5:9b          # o qualsiasi modello con tool calling
+ollama pull qwen3-embedding:4b  # modello di embedding (default)
+```
+
+### Backend
+
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+uvicorn app.main:app --reload --port 8006
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+L'interfaccia è disponibile su `http://localhost:5173`.
+
+---
+
+## Aggiungere un nuovo strumento
+
+1. Crea un file in `backend/app/tools/`, estendi `BaseTool` e implementa `name`, `description`, `parameters_schema` e `execute()`
+2. Registralo in `backend/app/tools/__init__.py` con `registry.register_tool(MyTool())`
+
+Il tool sarà immediatamente visibile nella pagina **Strumenti** dell'interfaccia e disponibile al modello nelle chat.
+
+---
+
+*Efesto — Costruisci il tuo Olimpo Digitale.*

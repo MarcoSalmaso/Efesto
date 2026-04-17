@@ -4,3 +4,12 @@ sqlmodel
 ollama
 python-dotenv
 aiosqlite
+python-multipart
+lancedb
+pyarrow
+numpy
+pandas
+pypdf
+python-docx
+beautifulsoup4
+lxml
