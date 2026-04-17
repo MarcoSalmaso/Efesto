@@ -248,28 +248,38 @@ const App = () => {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       
-      let assistantMsg = { 
-        role: 'assistant', 
-        content: '', 
-        thinking: '', 
-        created_at: new Date().toISOString() 
+      let assistantMsg = {
+        role: 'assistant',
+        content: '',
+        thinking: '',
+        created_at: new Date().toISOString()
       };
-      
+
       setMessages(prev => [...prev, assistantMsg]);
 
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-        
+
         const chunk = decoder.decode(value, { stream: true });
         const lines = chunk.split('\n');
-        
+
         for (const line of lines) {
           if (!line.trim()) continue;
           try {
             const data = JSON.parse(line);
             if (data.error) {
               assistantMsg.content += `\nErrore: ${data.error}`;
+            } else if (data.tool_calls) {
+              // Spezza il messaggio: la pill dei tool call + nuovo messaggio per la risposta finale
+              const pillMsg = { ...assistantMsg, tool_calls: data.tool_calls, content: '' };
+              assistantMsg = { role: 'assistant', content: '', thinking: '', created_at: new Date().toISOString() };
+              setMessages(prev => {
+                const updated = [...prev];
+                updated[updated.length - 1] = pillMsg;
+                return [...updated, assistantMsg];
+              });
+              continue;
             } else {
               if (data.content) assistantMsg.content += data.content;
               if (data.thinking) assistantMsg.thinking += data.thinking;
@@ -278,7 +288,7 @@ const App = () => {
                 fetchSessions();
               }
             }
-            
+
             setMessages(prev => {
               const updated = [...prev];
               updated[updated.length - 1] = { ...assistantMsg };

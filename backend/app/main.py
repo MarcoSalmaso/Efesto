@@ -306,6 +306,12 @@ async def chat_with_tools(request: ChatRequest, db: Session = Depends(get_sessio
                     yield json.dumps({"content": content, "thinking": thinking, "session_id": session_id}) + "\n"
 
             if tool_calls_raw:
+                # Notifica il frontend dei tool call per visualizzazione real-time
+                yield json.dumps({"tool_calls": [
+                    {"function": {"name": tc.function.name, "arguments": tc.function.arguments}}
+                    for tc in tool_calls_raw
+                ]}) + "\n"
+
                 # Formato per DB (con id tracciabile)
                 tool_calls_for_db = [
                     {
