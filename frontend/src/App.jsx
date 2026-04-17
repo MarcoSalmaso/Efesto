@@ -962,7 +962,10 @@ const App = () => {
         <div className="p-6">
           <div className="flex items-center space-x-3 mb-8">
             <div className="bg-orange-600 p-2 rounded-lg"><Layers size={20} /></div>
-            <span className="text-xl font-bold">Efesto</span>
+            <div>
+              <span className="text-xl font-bold leading-tight block">Efesto</span>
+              <span className="text-[10px] text-zinc-500 leading-tight">Il fabbro degli Dei</span>
+            </div>
           </div>
 
           <button 
