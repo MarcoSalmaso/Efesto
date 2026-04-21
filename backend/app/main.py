@@ -29,6 +29,7 @@ def migrate_db():
         ("gen_temperature",         "REAL NOT NULL DEFAULT 0.8"),
         ("gen_top_p",               "REAL NOT NULL DEFAULT 0.9"),
         ("gen_num_predict",         "INTEGER NOT NULL DEFAULT -1"),
+        ("default_model",           "TEXT NOT NULL DEFAULT ''"),
     ]
     with engine.connect() as conn:
         for col, definition in migrations:
@@ -229,6 +230,7 @@ def update_settings(new_settings: SystemSettings, session: Session = Depends(get
     db_settings.gen_temperature = new_settings.gen_temperature
     db_settings.gen_top_p = new_settings.gen_top_p
     db_settings.gen_num_predict = new_settings.gen_num_predict
+    db_settings.default_model = new_settings.default_model
     db_settings.last_updated = datetime.now(timezone.utc)
     session.add(db_settings)
     session.commit()

@@ -75,6 +75,7 @@ const App = () => {
     gen_temperature: 0.8,
     gen_top_p: 0.9,
     gen_num_predict: -1,
+    default_model: '',
   });
 
   // Workflow states
@@ -95,6 +96,7 @@ const App = () => {
 
   const [artifactTabs, setArtifactTabs] = useState({});
   const [copiedArtifact, setCopiedArtifact] = useState(null);
+  const [copiedMsgIdx, setCopiedMsgIdx] = useState(null);
   const [reembedStatus, setReembedStatus] = useState({ status: 'idle', message: '' });
   const importFileInputRef = useRef(null);
 
@@ -111,6 +113,7 @@ const App = () => {
 
   const abortControllerRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -185,6 +188,14 @@ const App = () => {
     }
   }, [models, settings.rag_embedding_model]);
 
+  useEffect(() => {
+    if (models.length === 0) return;
+    const preferred = settings.default_model && models.includes(settings.default_model)
+      ? settings.default_model
+      : models[0];
+    setSelectedModel(preferred);
+  }, [models, settings.default_model]);
+
   const fetchRunningModels = async () => {
     try {
       const res = await axios.get(`${API_BASE}/ollama/ps`);
@@ -196,7 +207,6 @@ const App = () => {
     try {
       const res = await axios.get(`${API_BASE}/ollama/list`);
       setModels(res.data.models || []);
-      if (res.data.models?.length > 0) setSelectedModel(res.data.models[0]);
       setIsBackendLive(true);
     } catch (err) { setIsBackendLive(false); }
   };
@@ -435,6 +445,7 @@ const App = () => {
     setMessages(prev => [...prev, userMsg]);
     const textToSend = inputText;
     setInputText('');
+    if (textareaRef.current) { textareaRef.current.style.height = 'auto'; }
     setIsLoading(true);
     tokenStartRef.current = null;
     setTokenStats({ count: 0, rate: null, elapsed: null, active: false });
@@ -647,6 +658,28 @@ const App = () => {
       a.href = url; a.download = filename; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 5000);
     } catch (err) { addToast('Errore durante l\'esportazione.', 'error'); console.error(err); }
+  };
+
+  const handleExportChat = () => {
+    if (!messages.length) return;
+    const session = sessions.find(s => s.id === currentSessionId);
+    const title = session?.title || 'Conversazione';
+    const now = new Date().toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const lines = [`# ${title}`, `*Esportato il ${now}*`, ''];
+    for (const msg of messages) {
+      if (msg.role === 'tool') continue;
+      if (msg.role === 'assistant' && !msg.content && msg.tool_calls?.length) continue;
+      const author = msg.role === 'user' ? `**${settings.user_name || 'Tu'}**` : '**Efesto**';
+      const time = formatTime(msg.created_at);
+      lines.push('---', `${author}${time ? ` · ${time}` : ''}`, '', msg.content || '', '');
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.md`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   };
 
   const handleImport = async (event) => {
@@ -976,6 +1009,23 @@ const App = () => {
             className="w-full bg-zinc-800/60 border border-zinc-600/60 rounded-xl py-3 px-4 outline-none focus:border-orange-500/50 transition-all resize-none"
             placeholder="Istruzioni globali per l'AI..."
           />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-zinc-500 uppercase tracking-widest flex items-center space-x-2">
+            <Cpu size={14} /> <span>Modello Default</span>
+          </label>
+          <select
+            value={settings.default_model}
+            onChange={(e) => setSettings({ ...settings, default_model: e.target.value })}
+            className="w-full bg-zinc-800/60 border border-zinc-600/60 rounded-xl py-3 px-4 outline-none focus:border-orange-500/50 transition-all"
+          >
+            <option value="">— Primo disponibile —</option>
+            {models.map(m => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+          <p className="text-[10px] text-zinc-600">Modello selezionato automaticamente all'avvio. Se non disponibile, viene usato il primo in lista.</p>
         </div>
 
         <div className="space-y-2">
@@ -1337,6 +1387,17 @@ const App = () => {
              "Knowledge Base"}
           </h2>
           {activeTab === 'chat' && (
+            <div className="flex items-center space-x-2">
+            {messages.length > 0 && (
+              <button
+                onClick={handleExportChat}
+                title="Esporta chat in Markdown"
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-zinc-600/60 bg-zinc-700/50 text-zinc-300 hover:border-zinc-500 hover:bg-zinc-700/70 text-xs font-medium transition-all"
+              >
+                <Download size={13} />
+                <span>Esporta</span>
+              </button>
+            )}
             <div className="relative" ref={modelDropdownRef}>
               <button
                 onClick={() => setIsModelDropdownOpen(o => !o)}
@@ -1381,6 +1442,7 @@ const App = () => {
                   </div>
                 </div>
               )}
+            </div>
             </div>
           )}
         </header>
@@ -1472,6 +1534,21 @@ const App = () => {
                         <span className="absolute bottom-2 right-3 text-[9px] text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity">
                           {formatTime(msg.created_at)}
                         </span>
+                        {msg.content && !isStreamingThis && (
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(msg.content);
+                              setCopiedMsgIdx(i);
+                              setTimeout(() => setCopiedMsgIdx(null), 2000);
+                            }}
+                            title="Copia messaggio"
+                            className="absolute top-2 right-2 p-1 rounded-md text-zinc-600 hover:text-zinc-300 hover:bg-zinc-600/40 opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            {copiedMsgIdx === i
+                              ? <Check size={13} className="text-green-400" />
+                              : <Copy size={13} />}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1530,19 +1607,31 @@ const App = () => {
 
         {activeTab === 'chat' && (
           <div className="p-8 shrink-0">
-            <div className="max-w-4xl mx-auto relative flex items-center">
-              <input
-                type="text"
+            <div className="max-w-4xl mx-auto relative flex items-end">
+              <textarea
+                ref={textareaRef}
+                rows={1}
                 value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && !isLoading && handleSendMessage()}
+                onChange={(e) => {
+                  setInputText(e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = `${e.target.scrollHeight}px`;
+                  e.target.style.overflowY = e.target.scrollHeight > 200 ? 'auto' : 'hidden';
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !isLoading) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
                 placeholder="Invia un messaggio a Efesto..."
-                className="w-full bg-zinc-800/70 border border-zinc-700/60 rounded-2xl py-4 px-6 pr-14 outline-none focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/10 transition-all shadow-xl shadow-black/30 placeholder:text-zinc-500"
+                style={{ resize: 'none', maxHeight: '200px', overflowY: 'hidden' }}
+                className="w-full bg-zinc-800/70 border border-zinc-700/60 rounded-2xl py-4 px-6 pr-14 outline-none focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/10 transition-all shadow-xl shadow-black/30 placeholder:text-zinc-500 custom-scrollbar"
               />
               {isLoading ? (
                 <button
                   onClick={handleStopStreaming}
-                  className="absolute right-3 bg-zinc-600/80 hover:bg-red-700/80 p-2.5 rounded-xl transition-all shadow-lg group"
+                  className="absolute right-3 bottom-3 bg-zinc-600/80 hover:bg-red-700/80 p-2.5 rounded-xl transition-all shadow-lg group"
                   title="Interrompi generazione"
                 >
                   <Square size={18} className="text-zinc-300 group-hover:text-red-300 fill-current" />
@@ -1550,7 +1639,7 @@ const App = () => {
               ) : (
                 <button
                   onClick={handleSendMessage}
-                  className="absolute right-3 bg-gradient-to-br from-orange-500 to-orange-700 p-2.5 rounded-xl hover:from-orange-400 hover:to-orange-600 transition-all shadow-lg shadow-orange-900/40"
+                  className="absolute right-3 bottom-3 bg-gradient-to-br from-orange-500 to-orange-700 p-2.5 rounded-xl hover:from-orange-400 hover:to-orange-600 transition-all shadow-lg shadow-orange-900/40"
                 >
                   <Send size={18} />
                 </button>
