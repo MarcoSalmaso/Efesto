@@ -62,6 +62,13 @@ class ChatMessage(SQLModel, table=True):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     session: ChatSession = Relationship(back_populates="messages")
 
+class Workflow(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(default="Nuovo Workflow")
+    definition: str = Field(default="{}", sa_column=Column(Text))  # JSON: {nodes, edges}
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
 class MemoryEntry(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     content: str = Field(sa_column=Column(Text))

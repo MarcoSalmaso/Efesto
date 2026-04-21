@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",
+    "@xyflow/react": "^12.10.2",
     "axios": "^1.7.9",
     "highlight.js": "^11.11.1",
     "katex": "^0.16.45",

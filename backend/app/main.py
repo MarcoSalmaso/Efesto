@@ -11,7 +11,7 @@ import asyncio
 import uuid
 import numpy as np
 from datetime import datetime, timezone
-from .models import ModelConfig, ToolDefinition, ChatSession, ChatMessage, SystemSettings, KnowledgeChunk
+from .models import ModelConfig, ToolDefinition, ChatSession, ChatMessage, SystemSettings, KnowledgeChunk, Workflow
 
 sqlite_file_name = "efesto.db"
 sqlite_url = f"sqlite:///{sqlite_file_name}"
@@ -705,5 +705,143 @@ async def chat_with_tools(request: ChatRequest, db: Session = Depends(get_sessio
 
         except Exception as e:
             yield json.dumps({"error": str(e)}) + "\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+# ── Workflow ────────────────────────────────────────────────────────────────
+
+@app.get("/workflows/")
+def list_workflows(session: Session = Depends(get_session)):
+    return session.exec(select(Workflow).order_by(Workflow.updated_at.desc())).all()
+
+@app.post("/workflows/")
+def create_workflow(session: Session = Depends(get_session)):
+    wf = Workflow()
+    session.add(wf); session.commit(); session.refresh(wf)
+    return wf
+
+@app.get("/workflows/{wf_id}")
+def get_workflow(wf_id: int, session: Session = Depends(get_session)):
+    wf = session.get(Workflow, wf_id)
+    if not wf: raise HTTPException(404, "Workflow non trovato")
+    return wf
+
+@app.patch("/workflows/{wf_id}")
+def update_workflow(wf_id: int, data: dict, session: Session = Depends(get_session)):
+    wf = session.get(Workflow, wf_id)
+    if not wf: raise HTTPException(404, "Workflow non trovato")
+    if "name" in data: wf.name = data["name"].strip() or wf.name
+    if "definition" in data: wf.definition = json.dumps(data["definition"])
+    wf.updated_at = datetime.now(timezone.utc)
+    session.commit(); session.refresh(wf)
+    return wf
+
+@app.delete("/workflows/{wf_id}")
+def delete_workflow(wf_id: int, session: Session = Depends(get_session)):
+    wf = session.get(Workflow, wf_id)
+    if not wf: raise HTTPException(404, "Workflow non trovato")
+    session.delete(wf); session.commit()
+    return {"ok": True}
+
+# ── Execution engine ─────────────────────────────────────────────────────────
+
+def _topo_sort(nodes: list, edges: list) -> list:
+    """Ordine topologico del DAG (Kahn's algorithm)."""
+    ids = {n["id"] for n in nodes}
+    in_edges = {n["id"]: [] for n in nodes}
+    out_edges = {n["id"]: [] for n in nodes}
+    for e in edges:
+        if e["source"] in ids and e["target"] in ids:
+            in_edges[e["target"]].append(e["source"])
+            out_edges[e["source"]].append(e["target"])
+    queue = [n["id"] for n in nodes if not in_edges[n["id"]]]
+    order = []
+    while queue:
+        nid = queue.pop(0)
+        order.append(nid)
+        for child in out_edges[nid]:
+            in_edges[child].remove(nid)
+            if not in_edges[child]:
+                queue.append(child)
+    return order
+
+def _resolve(text: str, outputs: dict) -> str:
+    """Sostituisce {{node_id.output}} con i valori reali."""
+    import re
+    def replace(m):
+        return str(outputs.get(m.group(1), {}).get("output", ""))
+    return re.sub(r"\{\{(\w+)\.output\}\}", replace, text)
+
+@app.post("/workflows/{wf_id}/run")
+async def run_workflow(wf_id: int, body: dict, session: Session = Depends(get_session)):
+    wf = session.get(Workflow, wf_id)
+    if not wf: raise HTTPException(404, "Workflow non trovato")
+
+    definition = json.loads(wf.definition)
+    nodes = definition.get("nodes", [])
+    edges = definition.get("edges", [])
+    user_input = body.get("input", "")
+    model = body.get("model", "")
+    settings = session.exec(select(SystemSettings)).first()
+
+    node_map = {n["id"]: n for n in nodes}
+    order = _topo_sort(nodes, edges)
+
+    async def generate():
+        outputs: dict = {}
+        for nid in order:
+            node = node_map.get(nid)
+            if not node: continue
+            ntype = node.get("type", "")
+            data  = node.get("data", {})
+
+            yield json.dumps({"event": "node_start", "node_id": nid}) + "\n"
+
+            try:
+                if ntype == "input":
+                    result = user_input
+
+                elif ntype == "ai_prompt":
+                    prompt = _resolve(data.get("prompt", ""), outputs)
+                    system = data.get("system", "") or (settings.system_prompt if settings else "")
+                    full = ""
+                    for chunk in ollama.chat(
+                        model=model or (data.get("model") or (settings and settings.rag_embedding_model) or ""),
+                        messages=[{"role": "system", "content": system},
+                                  {"role": "user",   "content": prompt}],
+                        stream=True,
+                    ):
+                        token = chunk.message.content or ""
+                        full += token
+                        if token:
+                            yield json.dumps({"event": "node_token", "node_id": nid, "token": token}) + "\n"
+                    result = full
+
+                elif ntype == "python":
+                    code_template = data.get("code", "")
+                    code = _resolve(code_template, outputs)
+                    # Inietta le variabili degli step precedenti come variabili Python
+                    injections = "\n".join(
+                        f'__{k} = {json.dumps(v.get("output",""))}' for k, v in outputs.items()
+                    )
+                    final_code = injections + "\n" + code if injections else code
+                    from .tools.python_executor import PythonExecutorTool
+                    result = await PythonExecutorTool().execute(final_code)
+
+                elif ntype == "output":
+                    result = _resolve(data.get("template", "{{" + (edges[-1]["source"] if edges else "") + ".output}}"), outputs)
+
+                else:
+                    result = ""
+
+                outputs[nid] = {"output": result}
+                yield json.dumps({"event": "node_done", "node_id": nid, "output": result}) + "\n"
+
+            except Exception as e:
+                outputs[nid] = {"output": "", "error": str(e)}
+                yield json.dumps({"event": "node_error", "node_id": nid, "error": str(e)}) + "\n"
+
+        yield json.dumps({"event": "workflow_done", "outputs": outputs}) + "\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")

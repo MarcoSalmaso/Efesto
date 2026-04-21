@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+const WorkflowEditor = lazy(() => import('./workflow/WorkflowEditor'));
+const WorkflowList   = lazy(() => import('./workflow/WorkflowList'));
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -46,6 +48,7 @@ import {
   Info,
   Thermometer,
   SlidersHorizontal,
+  GitBranch,
 } from 'lucide-react';
 
 const API_BASE = "http://localhost:8006";
@@ -73,6 +76,10 @@ const App = () => {
     gen_top_p: 0.9,
     gen_num_predict: -1,
   });
+
+  // Workflow states
+  const [workflows, setWorkflows] = useState([]);
+  const [openWorkflow, setOpenWorkflow] = useState(null);
 
   // RAG States
   const [knowledgeBase, setKnowledgeBase] = useState([]);
@@ -129,10 +136,21 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'db') {
-      fetchKnowledgeBase();
-    }
+    if (activeTab === 'db') fetchKnowledgeBase();
+    if (activeTab === 'workflow') fetchWorkflows();
   }, [activeTab]);
+
+  const fetchWorkflows = async () => {
+    try { const r = await axios.get(`${API_BASE}/workflows/`); setWorkflows(r.data); } catch {}
+  };
+
+  const createWorkflow = async () => {
+    try {
+      const r = await axios.post(`${API_BASE}/workflows/`);
+      setWorkflows(prev => [r.data, ...prev]);
+      setOpenWorkflow(r.data);
+    } catch { addToast('Errore nella creazione del workflow.', 'error'); }
+  };
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -1270,9 +1288,10 @@ const App = () => {
 
           <div className="space-y-1 border-t border-zinc-700/40 pt-6">
             {[
-              { tab: 'db',       icon: <Database size={18} />, label: 'Database' },
-              { tab: 'tools',    icon: <Hammer size={18} />,   label: 'Strumenti' },
-              { tab: 'settings', icon: <Settings size={18} />, label: 'Impostazioni' },
+              { tab: 'db',       icon: <Database   size={18} />, label: 'Database' },
+              { tab: 'workflow', icon: <GitBranch  size={18} />, label: 'Workflow' },
+              { tab: 'tools',    icon: <Hammer     size={18} />, label: 'Strumenti' },
+              { tab: 'settings', icon: <Settings   size={18} />, label: 'Impostazioni' },
             ].map(({ tab, icon, label }) => (
               <button
                 key={tab}
@@ -1304,10 +1323,18 @@ const App = () => {
       {/* AREA CONTENUTO PRINCIPALE */}
       <main className="flex-1 flex flex-col min-w-0">
         <header className="h-14 flex items-center justify-between px-8 border-b border-zinc-700/40 bg-[#1e1e26]/80 backdrop-blur-sm shrink-0">
+          {activeTab === 'workflow' && openWorkflow && (
+            <button onClick={() => setOpenWorkflow(null)}
+              className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition-colors mr-3">
+              <ChevronRight size={14} className="rotate-180" /> Tutti i workflow
+            </button>
+          )}
           <h2 className="text-sm font-semibold text-zinc-300 tracking-wide">
             {activeTab === 'chat' ? (currentSessionId ? "Conversazione" : "Nuova Conversazione") :
              activeTab === 'settings' ? "Impostazioni" :
-             activeTab === 'tools' ? "Strumenti" : "Knowledge Base"}
+             activeTab === 'tools' ? "Strumenti" :
+             activeTab === 'workflow' ? (openWorkflow ? openWorkflow.name : "Workflow") :
+             "Knowledge Base"}
           </h2>
           {activeTab === 'chat' && (
             <div className="relative" ref={modelDropdownRef}>
@@ -1358,7 +1385,7 @@ const App = () => {
           )}
         </header>
 
-        <div className="flex-1 overflow-y-auto custom-scrollbar">
+        <div className={`flex-1 min-h-0 ${activeTab === 'workflow' && openWorkflow ? 'overflow-hidden flex flex-col' : 'overflow-y-auto custom-scrollbar'}`}>
           {activeTab === 'chat' ? (
             <div className="p-8 space-y-6 max-w-5xl mx-auto">
               {messages.length === 0 && !isLoading && (
@@ -1470,6 +1497,32 @@ const App = () => {
             <div className="p-12">{renderDatabase()}</div>
           ) : activeTab === 'tools' ? (
             <div className="p-12">{renderTools()}</div>
+          ) : activeTab === 'workflow' ? (
+            <Suspense fallback={<div className="h-full flex items-center justify-center text-zinc-600 text-sm">Caricamento...</div>}>
+              {openWorkflow ? (
+                <WorkflowEditor
+                  workflow={openWorkflow}
+                  models={models}
+                  selectedModel={selectedModel}
+                  addToast={addToast}
+                  onSaved={fetchWorkflows}
+                  onRenamed={updated => {
+                    setWorkflows(prev => prev.map(w => w.id === updated.id ? updated : w));
+                    setOpenWorkflow(updated);
+                  }}
+                />
+              ) : (
+                <div className="p-12">
+                  <WorkflowList
+                    workflows={workflows}
+                    onOpen={wf => setOpenWorkflow(wf)}
+                    onCreate={createWorkflow}
+                    onDelete={id => setWorkflows(prev => prev.filter(w => w.id !== id))}
+                    onRename={updated => setWorkflows(prev => prev.map(w => w.id === updated.id ? updated : w))}
+                  />
+                </div>
+              )}
+            </Suspense>
           ) : (
             <div className="p-12 text-center text-zinc-500 italic">Tab in fase di sviluppo...</div>
           )}
