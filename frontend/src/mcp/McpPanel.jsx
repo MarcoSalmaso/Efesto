@@ -47,13 +47,7 @@ function AddServerModal({ onClose, onAdded }) {
         const [k, ...rest] = line.split('=');
         if (k?.trim()) env[k.trim()] = rest.join('=').trim();
       }
-      await axios.post(`${API}/mcp/servers`, {
-        name: form.name.trim(),
-        command: form.command.trim(),
-        args,
-        env,
-        enabled: true,
-      });
+      await axios.post(`${API}/mcp/servers`, { name: form.name.trim(), command: form.command.trim(), args, env, enabled: true });
       onAdded();
       onClose();
     } catch (e) {
@@ -71,23 +65,23 @@ function AddServerModal({ onClose, onAdded }) {
         <div className="p-5 space-y-4">
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Nome</label>
-            <input className={field} value={form.name} onChange={e => set('name', e.target.value)} placeholder="es. filesystem" />
+            <input className={field} value={form.name} onChange={e => set('name', e.target.value)} placeholder="es. efesto-tools" />
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Comando</label>
-            <input className={field} value={form.command} onChange={e => set('command', e.target.value)} placeholder="es. npx" />
+            <input className={field} value={form.command} onChange={e => set('command', e.target.value)} placeholder="es. python3" />
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Argomenti <span className="normal-case font-normal">(uno per riga)</span></label>
             <textarea className={`${field} resize-none font-mono text-xs`} rows={3}
               value={form.args} onChange={e => set('args', e.target.value)}
-              placeholder={"-y\n@modelcontextprotocol/server-filesystem\n/Users/me/Desktop"} />
+              placeholder={"/percorso/assoluto/mcp_server.py"} />
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Variabili d'ambiente <span className="normal-case font-normal">(KEY=value, una per riga)</span></label>
             <textarea className={`${field} resize-none font-mono text-xs`} rows={2}
               value={form.env} onChange={e => set('env', e.target.value)}
-              placeholder={"API_KEY=abc123\nDEBUG=false"} />
+              placeholder={"API_KEY=abc123"} />
           </div>
           {error && <p className="text-xs text-red-400">{error}</p>}
         </div>
