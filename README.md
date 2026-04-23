@@ -1,6 +1,6 @@
 # Efesto — Local AI Workbench
 
-Efesto è un'applicazione **local-first** per interagire con modelli AI locali (via Ollama). Chat con streaming, RAG, tool calling, workflow visivi a blocchi e integrazione MCP — tutto gira sulla tua macchina, senza dipendenze da cloud esterni.
+Efesto è un'applicazione **local-first** per interagire con modelli AI locali (via Ollama). Chat con streaming, RAG, tool calling, agenti specializzati, prompt library, workflow visivi e integrazione MCP — tutto gira sulla tua macchina, senza dipendenze da cloud esterni.
 
 ---
 
@@ -8,19 +8,32 @@ Efesto è un'applicazione **local-first** per interagire con modelli AI locali (
 
 ### Chat
 - **Streaming in tempo reale** — risposte token per token con supporto al _thinking_ (chain-of-thought) per modelli come Qwen3 e Gemma4
-- **Velocità token/s** — contatore in tempo reale nella sidebar
+- **Velocità token/s** — contatore in tempo reale nella sidebar di destra
 - **Stop generazione** — interrompi il modello in qualsiasi momento
-- **Sidebar processo** — visualizzazione grafica dei passi del modello: ragionamento, tool call, esecuzione, risposta
+- **Sidebar processo** — visualizzazione dei passi del modello: ragionamento, tool call, esecuzione, risposta; mostra l'agente attivo quando presente
 - **Artifacts** — blocchi HTML/SVG renderizzati in un iframe interattivo con tab Anteprima/Codice e apertura in nuova scheda
 - **Rendering Markdown + LaTeX** — GFM, syntax highlighting e formule matematiche (KaTeX)
 - **Sessioni persistenti** — conversazioni salvate in SQLite, ricaricabili dalla sidebar
 - **Ricerca nelle sessioni** — cerca per titolo e contenuto dei messaggi
 - **Rinomina sessioni** — inline, direttamente dalla sidebar
 - **Parametri di generazione** — temperature, top-p e max token configurabili per sessione
+- **Strumenti chat** — pulsante `+` nella textarea apre un pannello con accesso rapido ad agenti e prompt library; scalabile per future aggiunte
 
 ### Modelli
 - **Selettore modello** — dropdown personalizzato con tutti i modelli Ollama disponibili
 - **Modelli in memoria** — indicatore in tempo reale dei modelli attivi (via SSE)
+
+### Agenti
+- **Profili specializzati** — ogni agente ha il proprio system prompt, modello, parametri di generazione e set di tool abilitati
+- **Colore personalizzato** — 8 colori preset; le bolle della chat e l'avatar riflettono il colore dell'agente che ha risposto
+- **Tracciamento per messaggio** — il colore e il nome dell'agente vengono salvati su ogni messaggio in SQLite, così ogni bolla mostra sempre l'agente corretto anche dopo aver cambiato selezione
+- **Pill agente attivo** — indicatore colorato nella textarea con pulsante per deselezionare senza aprire il menu
+- **Filtro tool** — configura quali tool (nativi e MCP) sono accessibili all'agente
+
+### Prompt Library
+- **Salvataggio prompt** — titolo, contenuto e tag (separati da virgola) persistiti in SQLite
+- **Ricerca** — filtra per titolo, contenuto e tag nel pannello dedicato e nel selettore inline
+- **Inserimento rapido** — dal pannello `+` nella chat, seleziona un prompt e viene inserito direttamente nella textarea
 
 ### Tool Calling
 I modelli compatibili possono invocare autonomamente gli strumenti durante la conversazione:
@@ -52,6 +65,7 @@ I modelli compatibili possono invocare autonomamente gli strumenti durante la co
 - **Template variables** — riferimento agli output dei nodi precedenti con `{{node_id.output}}`
 - **Suggerimenti inline** — pill cliccabili nel pannello configurazione per inserire riferimenti ai nodi collegati
 - **Modal risultato** — al termine del workflow il risultato finale appare in un popup leggibile e copiabile
+- **Rinomina workflow** — inline nell'editor e nella lista
 - **Salvataggio** — i workflow sono persistiti in SQLite e ricaricabili
 
 ---
@@ -62,7 +76,7 @@ I modelli compatibili possono invocare autonomamente gli strumenti durante la co
 |---|---|
 | Backend | Python 3.9+, FastAPI, SQLModel, Ollama SDK, LanceDB, PyArrow, httpx |
 | Frontend | React 19, Vite, Tailwind CSS, React Flow, Axios, react-markdown, KaTeX, Lucide React |
-| Database | SQLite (chat, config, chunk KB, workflow), LanceDB (vettori embedding) |
+| Database | SQLite (chat, sessioni, agenti, prompt, workflow, config), LanceDB (vettori embedding) |
 | AI | Ollama (modelli locali), embedding con `ollama.embed()` batch API |
 
 ---
@@ -74,7 +88,7 @@ Efesto/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py           # FastAPI app, endpoints, chat streaming
-│   │   ├── models.py         # Schema SQLite: settings, sessioni, chunk KB, workflow
+│   │   ├── models.py         # Schema SQLite: settings, sessioni, agenti, prompt, workflow
 │   │   ├── rag.py            # RagManager: chunking, embedding, ricerca LanceDB
 │   │   ├── extractors.py     # Estrazione testo da PDF, DOCX, CSV, JSON, HTML
 │   │   ├── mcp_manager.py    # Client MCP JSON-RPC 2.0 over stdio
@@ -94,6 +108,8 @@ Efesto/
 └── frontend/
     ├── src/
     │   ├── App.jsx            # Componente React principale
+    │   ├── agents/            # Pannello agenti + colori
+    │   ├── prompts/           # Prompt Library
     │   ├── workflow/          # Editor workflow (WorkflowEditor, nodes, ConfigPanel)
     │   ├── mcp/               # Pannello gestione MCP
     │   ├── main.jsx
@@ -158,6 +174,23 @@ cd frontend && npm run dev
 
 ---
 
+## Agenti: guida rapida
+
+1. Vai nel tab **Agenti** → **Nuovo agente**
+2. Assegna nome, system prompt, modello (opzionale), colore e tool abilitati
+3. In chat, clicca il pulsante **`+`** nella textarea → **Agente** per selezionarlo
+4. L'agente attivo appare come pill colorata; clicca `×` per deselezionarlo
+
+---
+
+## Prompt Library: guida rapida
+
+1. Vai nel tab **Prompt Library** → **Nuovo prompt**
+2. Inserisci titolo, contenuto e tag opzionali
+3. In chat, clicca **`+`** → **Prompt Library**, cerca e seleziona: il testo viene inserito nella textarea
+
+---
+
 ## MCP: aggiungere un server locale
 
 1. Crea uno script Python in `backend/mcp_servers/` seguendo il protocollo JSON-RPC 2.0 over stdio (vedi `efesto_tools.py` come riferimento)
@@ -204,6 +237,14 @@ La configurazione viene salvata in `mcp_config.json` (ignorato da git). Copia `m
 | `GET` | `/sessions` | Lista sessioni |
 | `PATCH` | `/sessions/{id}` | Rinomina sessione |
 | `GET` | `/sessions/search?q=` | Ricerca full-text nelle sessioni |
+| `GET` | `/agents/` | Lista agenti |
+| `POST` | `/agents/` | Crea agente |
+| `PATCH` | `/agents/{id}` | Aggiorna agente |
+| `DELETE` | `/agents/{id}` | Elimina agente |
+| `GET` | `/prompts/` | Lista prompt |
+| `POST` | `/prompts/` | Crea prompt |
+| `PATCH` | `/prompts/{id}` | Aggiorna prompt |
+| `DELETE` | `/prompts/{id}` | Elimina prompt |
 | `GET` | `/workflows/` | Lista workflow |
 | `POST` | `/workflows/` | Crea workflow |
 | `PATCH` | `/workflows/{id}` | Aggiorna workflow |
