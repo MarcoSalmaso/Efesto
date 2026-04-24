@@ -12,7 +12,7 @@ import threading
 import uuid
 import numpy as np
 from datetime import datetime, timezone
-from .models import ModelConfig, ToolDefinition, ChatSession, ChatMessage, SystemSettings, KnowledgeChunk, Workflow, Agent, Prompt
+from .models import ChatSession, ChatMessage, SystemSettings, KnowledgeChunk, Workflow, Agent, Prompt
 from .mcp_manager import mcp_manager, load_config, save_config
 
 sqlite_file_name = "efesto.db"

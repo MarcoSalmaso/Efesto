@@ -27,26 +27,9 @@ class KnowledgeChunk(SQLModel, table=True):
     metadata_json: str = Field(default="{}", sa_column=Column(Text))
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-class ModelConfig(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name: str = Field(index=True)
-    provider: str = "ollama"
-    is_active: bool = True
-    parameters: Dict[str, Any] = Field(default={}, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class ToolDefinition(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name: str = Field(index=True, unique=True)
-    description: str
-    enabled: bool = True
-    tool_type: str = "local" # local, mcp
-    config: Dict[str, Any] = Field(default={}, sa_column=Column(JSON))
-
 class ChatSession(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     title: str = "Nuova Conversazione"
-    model_id: Optional[int] = Field(default=None, foreign_key="modelconfig.id")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     messages: List["ChatMessage"] = Relationship(back_populates="session")
 
