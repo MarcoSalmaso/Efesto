@@ -130,6 +130,7 @@ const App = () => {
   const modelDropdownRef = useRef(null);
 
   const abortControllerRef = useRef(null);
+  const sendingRef = useRef(false);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -468,7 +469,8 @@ const App = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!inputText.trim() || !selectedModel || isLoading) return;
+    if (!inputText.trim() || !selectedModel || isLoading || sendingRef.current) return;
+    sendingRef.current = true;
 
     const userMsg = { role: 'user', content: inputText, created_at: new Date().toISOString() };
     setMessages(prev => [...prev, userMsg]);
@@ -510,16 +512,19 @@ const App = () => {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
 
-      let assistantMsg = {
-        role: 'assistant',
-        content: '',
-        thinking: '',
-        created_at: new Date().toISOString(),
+      // Snapshot dell'agente attivo al momento dell'invio
+      const agentSnapshot = {
         agent_name: activeAgent?.name ?? null,
         agent_color: activeAgent?.color ?? null,
       };
 
-      setMessages(prev => [...prev, assistantMsg]);
+      // Aggiungi il messaggio assistant vuoto — tutti gli aggiornamenti successivi
+      // usano il pattern "prev =>" per leggere sempre lo stato corrente, evitando
+      // race condition con le closure su variabili mutabili.
+      setMessages(prev => [...prev, {
+        role: 'assistant', content: '', thinking: '',
+        created_at: new Date().toISOString(), ...agentSnapshot,
+      }]);
 
       while (true) {
         const { value, done } = await reader.read();
@@ -550,40 +555,55 @@ const App = () => {
             }
 
             if (data.error) {
-              assistantMsg.content += `\nErrore: ${data.error}`;
-            } else if (data.tool_calls) {
-              // Spezza il messaggio: la pill dei tool call + nuovo messaggio per la risposta finale
-              const pillMsg = { ...assistantMsg, tool_calls: data.tool_calls, content: '' };
-              assistantMsg = { role: 'assistant', content: '', thinking: '', created_at: new Date().toISOString(), agent_name: activeAgent?.name ?? null, agent_color: activeAgent?.color ?? null };
               setMessages(prev => {
                 const updated = [...prev];
-                updated[updated.length - 1] = pillMsg;
-                return [...updated, assistantMsg];
+                const last = { ...updated[updated.length - 1] };
+                last.content = (last.content || '') + `\nErrore: ${data.error}`;
+                updated[updated.length - 1] = last;
+                return updated;
               });
-              continue;
+            } else if (data.tool_calls) {
+              // Trasforma l'ultimo messaggio in pill (svuota il contenuto testuale,
+              // aggiunge tool_calls) e appende un nuovo messaggio vuoto per la risposta finale.
+              // Tutto dentro un unico updater atomico: nessuna closure su variabili esterne.
+              setMessages(prev => {
+                const updated = [...prev];
+                updated[updated.length - 1] = {
+                  ...updated[updated.length - 1],
+                  tool_calls: data.tool_calls,
+                  content: '',
+                  thinking: '',
+                };
+                return [...updated, {
+                  role: 'assistant', content: '', thinking: '',
+                  created_at: new Date().toISOString(), ...agentSnapshot,
+                }];
+              });
             } else {
-              if (data.content) {
-                assistantMsg.content += data.content;
+              if (data.content || data.thinking) {
                 const now = performance.now();
-                if (!tokenStartRef.current) tokenStartRef.current = now;
-                const elapsed = (now - tokenStartRef.current) / 1000;
-                setTokenStats(prev => {
-                  const count = prev.count + 1;
-                  return { count, rate: elapsed > 0.1 ? count / elapsed : null, elapsed, active: true };
+                if (data.content && !tokenStartRef.current) tokenStartRef.current = now;
+                setMessages(prev => {
+                  const updated = [...prev];
+                  const last = { ...updated[updated.length - 1] };
+                  if (data.content) last.content = (last.content || '') + data.content;
+                  if (data.thinking) last.thinking = (last.thinking || '') + data.thinking;
+                  updated[updated.length - 1] = last;
+                  return updated;
                 });
+                if (data.content) {
+                  const elapsed = (now - tokenStartRef.current) / 1000;
+                  setTokenStats(prev => {
+                    const count = prev.count + 1;
+                    return { count, rate: elapsed > 0.1 ? count / elapsed : null, elapsed, active: true };
+                  });
+                }
               }
-              if (data.thinking) assistantMsg.thinking += data.thinking;
               if (data.session_id && !currentSessionId) {
                 setCurrentSessionId(data.session_id);
                 fetchSessions();
               }
             }
-
-            setMessages(prev => {
-              const updated = [...prev];
-              updated[updated.length - 1] = { ...assistantMsg };
-              return updated;
-            });
           } catch (e) { console.error("Errore parsing chunk:", e); }
         }
       }
@@ -594,6 +614,7 @@ const App = () => {
       }
     } finally {
       abortControllerRef.current = null;
+      sendingRef.current = false;
       setIsLoading(false);
       setProcessingSteps(prev => prev.map(s => ({ ...s, status: 'done' })));
       setTokenStats(prev => ({ ...prev, active: false }));
