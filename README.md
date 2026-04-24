@@ -268,4 +268,4 @@ La configurazione viene salvata in `mcp_config.json` (ignorato da git). Copia `m
 
 ---
 
-*Efesto — Costruisci il tuo Olimpo Digitale.*
+*Efesto — Costruisci il tuo Olimpo Digitale*
