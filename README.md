@@ -1,5 +1,7 @@
 # Efesto — Local AI Workbench
 
+![Infografica](./assets/infografica.png)
+
 Efesto è un'applicazione **local-first** per interagire con modelli AI locali (via Ollama). Chat con streaming, RAG, tool calling, agenti specializzati, prompt library, workflow visivi e integrazione MCP — tutto gira sulla tua macchina, senza dipendenze da cloud esterni.
 
 ---
