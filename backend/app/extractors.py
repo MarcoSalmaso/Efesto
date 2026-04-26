@@ -2,7 +2,7 @@ import io
 import csv
 import json
 
-SUPPORTED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".csv", ".json", ".html", ".htm"}
+SUPPORTED_EXTENSIONS = {".txt", ".md", ".pdf", ".docx", ".csv", ".json", ".html", ".htm", ".xlsx"}
 
 
 def extract_text(content: bytes, filename: str) -> str:
@@ -19,6 +19,8 @@ def extract_text(content: bytes, filename: str) -> str:
         return _from_json(content)
     if ext in (".html", ".htm"):
         return _from_html(content)
+    if ext == ".xlsx":
+        return _from_xlsx(content)
     raise ValueError(f"Formato non supportato: {ext}")
 
 
@@ -51,6 +53,21 @@ def _from_csv(content: bytes) -> str:
 def _from_json(content: bytes) -> str:
     data = json.loads(content.decode("utf-8"))
     return json.dumps(data, ensure_ascii=False, indent=2)
+
+
+def _from_xlsx(content: bytes) -> str:
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(content), data_only=True)
+    parts = []
+    for sheet in wb.worksheets:
+        rows = []
+        for row in sheet.iter_rows(values_only=True):
+            cells = [str(c) if c is not None else "" for c in row]
+            if any(c.strip() for c in cells):
+                rows.append("\t".join(cells))
+        if rows:
+            parts.append(f"[Foglio: {sheet.title}]\n" + "\n".join(rows))
+    return "\n\n".join(parts)
 
 
 def _from_html(content: bytes) -> str:

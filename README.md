@@ -20,6 +20,7 @@ Efesto è un'applicazione **local-first** per interagire con modelli AI locali (
 - **Rinomina sessioni** — inline, direttamente dalla sidebar
 - **Parametri di generazione** — temperature, top-p e max token configurabili per sessione
 - **Strumenti chat** — pulsante `+` nella textarea apre un pannello con accesso rapido ad agenti e prompt library; scalabile per future aggiunte
+- **Allegati in chat** — allega immagini (PNG, JPG, WebP, GIF) e documenti (PDF, DOCX, TXT, MD, CSV, JSON, HTML, XLSX) direttamente nella textarea; le immagini vengono inviate ai modelli vision, i documenti vengono estratti e iniettati nel contesto del messaggio
 
 ### Modelli
 - **Selettore modello** — dropdown personalizzato con tutti i modelli Ollama disponibili
@@ -55,7 +56,7 @@ I modelli compatibili possono invocare autonomamente gli strumenti durante la co
 - **MCP incluso** — `mcp_servers/efesto_tools.py` è un server di esempio con tool `get_time`, `calculator` ed `echo`
 
 ### RAG (Retrieval-Augmented Generation)
-- **Formati supportati** — PDF, DOCX, TXT, MD, CSV, JSON, HTML
+- **Formati supportati** — PDF, DOCX, TXT, MD, CSV, JSON, HTML, XLSX
 - **Pipeline locale** — chunking, embedding con `ollama.embed()` e ricerca semantica via LanceDB
 - **Knowledge Base resiliente** — i chunk testuali sono salvati in SQLite separatamente dai vettori: cambiare modello di embedding non richiede di ricaricare i file
 - **Esporta / Importa KB** — backup portabile in JSON con re-embedding automatico all'importazione

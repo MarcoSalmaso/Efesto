@@ -58,6 +58,8 @@ import {
   Bot,
   BookOpen,
   FlaskConical,
+  Paperclip,
+  ImageIcon,
 } from 'lucide-react';
 
 const API_BASE = "http://localhost:8006";
@@ -113,6 +115,10 @@ const App = () => {
   const [processingSteps, setProcessingSteps] = useState([]);
   const [tokenStats, setTokenStats] = useState({ count: 0, rate: null, elapsed: null, active: false });
   const tokenStartRef = useRef(null);
+
+  // Allegati chat
+  const [chatAttachments, setChatAttachments] = useState([]); // [{name, type:'image'|'file', data, mime}]
+  const chatFileInputRef = useRef(null);
 
   const [artifactTabs, setArtifactTabs] = useState({});
   const [copiedArtifact, setCopiedArtifact] = useState(null);
@@ -471,8 +477,11 @@ const App = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!inputText.trim() || !selectedModel || isLoading || sendingRef.current) return;
+    if ((!inputText.trim() && chatAttachments.length === 0) || !selectedModel || isLoading || sendingRef.current) return;
     sendingRef.current = true;
+
+    const attachmentsSnapshot = [...chatAttachments];
+    setChatAttachments([]);
 
     const userMsg = { role: 'user', content: inputText, created_at: new Date().toISOString() };
     setMessages(prev => [...prev, userMsg]);
@@ -499,12 +508,16 @@ const App = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: activeAgent?.model || selectedModel,
-          message: textToSend,
+          message: textToSend || '(vedi allegati)',
           session_id: currentSessionId,
           agent_id: activeAgent?.id || null,
           temperature: settings.gen_temperature,
           top_p: settings.gen_top_p,
           num_predict: settings.gen_num_predict === -1 ? null : settings.gen_num_predict,
+          images: attachmentsSnapshot.filter(a => a.type === 'image').map(a => a.data),
+          file_context: attachmentsSnapshot.filter(a => a.type === 'file').map(a =>
+            `[File: ${a.name}]\n${a.data}`
+          ).join('\n\n---\n\n') || null,
         }),
         signal: controller.signal,
       });
@@ -625,6 +638,32 @@ const App = () => {
 
   const handleStopStreaming = () => {
     abortControllerRef.current?.abort();
+  };
+
+  const handleChatFileSelect = async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    e.target.value = '';
+    const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+    for (const file of files) {
+      if (IMAGE_TYPES.includes(file.type)) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const base64 = ev.target.result.split(',')[1];
+          setChatAttachments(prev => [...prev, { name: file.name, type: 'image', data: base64, mime: file.type, preview: ev.target.result }]);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+          const res = await fetch(`${API_BASE}/chat/extract`, { method: 'POST', body: formData });
+          if (!res.ok) { const err = await res.json(); addToast(err.detail || 'Errore estrazione file', 'error'); continue; }
+          const { text } = await res.json();
+          setChatAttachments(prev => [...prev, { name: file.name, type: 'file', data: text, mime: file.type }]);
+        } catch { addToast(`Errore caricando ${file.name}`, 'error'); }
+      }
+    }
   };
 
   const toggleThinking = (index) => {
@@ -1714,9 +1753,38 @@ const App = () => {
 
         {activeTab === 'chat' && (
           <div className="p-8 shrink-0">
-            <div className="max-w-4xl mx-auto relative flex items-end">
+            <div className="max-w-4xl mx-auto">
+
+            {/* Chip allegati — sopra la textarea */}
+            {chatAttachments.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {chatAttachments.map((att, i) => (
+                  <div key={i} className="flex items-center gap-1.5 bg-zinc-800/80 border border-zinc-700/60 rounded-xl px-2.5 py-1.5 text-xs text-zinc-300 max-w-[200px] shadow-sm">
+                    {att.type === 'image'
+                      ? <img src={att.preview} alt={att.name} className="w-6 h-6 rounded-lg object-cover shrink-0" />
+                      : <FileText size={13} className="text-orange-400 shrink-0" />
+                    }
+                    <span className="truncate">{att.name}</span>
+                    <button onClick={() => setChatAttachments(prev => prev.filter((_, j) => j !== i))}
+                      className="text-zinc-600 hover:text-red-400 transition-colors shrink-0 ml-0.5">
+                      <X size={11} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="relative flex items-end">
               {/* Chat tool panel — pulsante + unico espandibile */}
               <div className="absolute left-3 bottom-3 z-10 flex items-center gap-1.5">
+                <button
+                  onClick={() => chatFileInputRef.current?.click()}
+                  disabled={isLoading}
+                  title="Allega file"
+                  className="w-7 h-7 flex items-center justify-center rounded-xl border bg-zinc-700/50 border-zinc-600/40 text-zinc-400 hover:bg-zinc-700/80 hover:text-orange-400 transition-all disabled:opacity-40"
+                >
+                  <Paperclip size={13} />
+                </button>
                 <div className="relative">
                   <button
                     onClick={() => { setChatPanel(p => p ? null : 'menu'); setPromptSearch(''); }}
@@ -1904,6 +1972,16 @@ const App = () => {
                 )}
               </div>
 
+              {/* Input file nascosto */}
+              <input
+                ref={chatFileInputRef}
+                type="file"
+                multiple
+                accept="image/*,.pdf,.docx,.txt,.md,.csv,.json,.html,.htm,.xlsx"
+                className="hidden"
+                onChange={handleChatFileSelect}
+              />
+
               <textarea
                 ref={textareaRef}
                 rows={1}
@@ -1922,8 +2000,9 @@ const App = () => {
                 }}
                 placeholder="Invia un messaggio a Efesto..."
                 style={{ resize: 'none', maxHeight: '200px' }}
-                className={`w-full bg-zinc-800/70 border border-zinc-700/60 rounded-2xl py-4 pr-14 outline-none focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/10 transition-all shadow-xl shadow-black/30 placeholder:text-zinc-500 custom-scrollbar ${activeAgent ? 'pl-[12rem]' : 'pl-[3rem]'}`}
+                className={`w-full bg-zinc-800/70 border border-zinc-700/60 rounded-2xl py-4 pr-14 outline-none focus:border-orange-500/50 focus:ring-2 focus:ring-orange-500/10 transition-all shadow-xl shadow-black/30 placeholder:text-zinc-500 custom-scrollbar ${activeAgent ? 'pl-[13rem]' : 'pl-[5rem]'}`}
               />
+
               {isLoading ? (
                 <button
                   onClick={handleStopStreaming}
@@ -1940,6 +2019,7 @@ const App = () => {
                   <Send size={18} />
                 </button>
               )}
+            </div>
             </div>
           </div>
         )}

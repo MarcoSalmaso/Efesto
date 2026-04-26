@@ -551,6 +551,23 @@ class ChatRequest(BaseModel):
     temperature: Optional[float] = None
     top_p: Optional[float] = None
     num_predict: Optional[int] = None
+    images: Optional[List[str]] = None        # base64, per modelli vision
+    file_context: Optional[str] = None        # testo estratto da file allegati
+
+@app.post("/chat/extract")
+async def extract_chat_file(file: UploadFile = File(...)):
+    from .extractors import extract_text, SUPPORTED_EXTENSIONS, _ext
+    ext = _ext(file.filename)
+    if ext not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(400, f"Formato non supportato. Usa: {', '.join(sorted(SUPPORTED_EXTENSIONS))}")
+    content = await file.read()
+    try:
+        text = extract_text(content, file.filename)
+    except Exception as e:
+        raise HTTPException(400, f"Errore nell'estrazione: {e}")
+    if not text.strip():
+        raise HTTPException(400, "Il file non contiene testo estraibile.")
+    return {"filename": file.filename, "text": text}
 
 @app.post("/chat")
 async def chat_with_tools(request: ChatRequest, db: Session = Depends(get_session)):
@@ -631,7 +648,14 @@ async def chat_with_tools(request: ChatRequest, db: Session = Depends(get_sessio
                         for tc in m.tool_calls
                     ]
                 ollama_messages.append(msg_dict)
-            ollama_messages.append({'role': 'user', 'content': request.message})
+
+            user_content = request.message
+            if request.file_context:
+                user_content = f"{request.file_context}\n\n---\n{request.message}"
+            user_msg_dict: Dict[str, Any] = {'role': 'user', 'content': user_content}
+            if request.images:
+                user_msg_dict['images'] = request.images
+            ollama_messages.append(user_msg_dict)
 
             tool_calls_raw = []
             first_thinking = True
