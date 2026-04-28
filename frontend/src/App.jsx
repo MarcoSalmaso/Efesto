@@ -67,6 +67,96 @@ import {
 
 const API_BASE = "http://localhost:8006";
 
+const PROSE_CLASSES = `prose prose-invert prose-zinc prose-sm max-w-none
+  prose-headings:text-zinc-100 prose-headings:font-semibold
+  prose-h1:text-2xl prose-h2:text-lg prose-h2:border-b prose-h2:border-zinc-700/50 prose-h2:pb-1
+  prose-p:text-zinc-300 prose-p:leading-relaxed
+  prose-a:text-orange-400 prose-a:no-underline hover:prose-a:underline
+  prose-code:text-orange-300 prose-code:bg-zinc-800/60 prose-code:px-1 prose-code:rounded
+  prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-700/40
+  prose-blockquote:border-orange-500/40 prose-blockquote:text-zinc-400
+  prose-strong:text-zinc-200 prose-li:text-zinc-300
+  prose-table:text-sm prose-th:text-zinc-300 prose-td:text-zinc-400
+  prose-hr:border-zinc-700/40`;
+
+const README_COMPONENTS = {
+  img: ({ src, alt, ...props }) => (
+    <img src={src?.replace(/^\.\/assets\//, '/assets/')} alt={alt} className="rounded-xl max-w-full" {...props} />
+  ),
+};
+
+function parseReadmeSections(raw) {
+  const blocks = raw.split(/(?=^## )/m);
+  const intro = blocks[0] || '';
+  const sections = blocks.slice(1).map(block => {
+    const firstNewline = block.indexOf('\n');
+    const title = block.slice(3, firstNewline).trim();
+    return { title, content: block };
+  });
+  return { intro, sections };
+}
+
+function ReadmePanel() {
+  const [active, setActive] = useState(null);
+  const { intro, sections } = React.useMemo(() => parseReadmeSections(readmeContent), []);
+  const displayed = active === null
+    ? readmeContent
+    : (active === '__intro__' ? intro : sections.find(s => s.title === active)?.content ?? '');
+
+  return (
+    <div className="flex flex-1 min-h-0 h-full">
+      {/* Sidebar nav */}
+      <nav className="w-56 shrink-0 border-r border-zinc-800 flex flex-col gap-0.5 p-3 overflow-y-auto custom-scrollbar">
+        <button
+          onClick={() => setActive(null)}
+          className={`text-left px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
+            active === null
+              ? 'bg-orange-600/15 text-orange-400'
+              : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+          }`}
+        >
+          Tutto
+        </button>
+        {intro.trim() && (
+          <button
+            onClick={() => setActive('__intro__')}
+            className={`text-left px-3 py-2 rounded-lg text-xs transition-all ${
+              active === '__intro__'
+                ? 'bg-orange-600/15 text-orange-400 font-medium'
+                : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+            }`}
+          >
+            Introduzione
+          </button>
+        )}
+        <div className="my-1 border-t border-zinc-800" />
+        {sections.map(s => (
+          <button
+            key={s.title}
+            onClick={() => setActive(s.title)}
+            className={`text-left px-3 py-2 rounded-lg text-xs transition-all ${
+              active === s.title
+                ? 'bg-orange-600/15 text-orange-400 font-medium'
+                : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+            }`}
+          >
+            {s.title}
+          </button>
+        ))}
+      </nav>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar px-10 py-8">
+        <div className={PROSE_CLASSES}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={README_COMPONENTS}>
+            {displayed}
+          </ReactMarkdown>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const App = () => {
   const [activeTab, setActiveTab] = useState('home');
   const [sessions, setSessions] = useState([]);
@@ -1532,7 +1622,7 @@ const App = () => {
           )}
         </header>
 
-        <div className={`flex-1 min-h-0 ${activeTab === 'workflow' && openWorkflow ? 'overflow-hidden flex flex-col' : 'overflow-y-auto custom-scrollbar'}`}>
+        <div className={`flex-1 min-h-0 ${activeTab === 'workflow' && openWorkflow || activeTab === 'readme' ? 'overflow-hidden flex flex-col' : 'overflow-y-auto custom-scrollbar'}`}>
           {activeTab === 'home' ? (
             <Suspense fallback={<div className="flex items-center justify-center py-12 text-zinc-600 text-sm">Caricamento...</div>}>
               <HomePage
@@ -1801,34 +1891,7 @@ const App = () => {
               </Suspense>
             </div>
           ) : activeTab === 'readme' ? (
-            <div className="flex-1 overflow-y-auto px-12 py-10">
-              <div className="max-w-3xl mx-auto prose prose-invert prose-zinc prose-sm
-                prose-headings:text-zinc-100 prose-headings:font-semibold
-                prose-h1:text-2xl prose-h2:text-lg prose-h2:border-b prose-h2:border-zinc-700/50 prose-h2:pb-1
-                prose-p:text-zinc-300 prose-p:leading-relaxed
-                prose-a:text-orange-400 prose-a:no-underline hover:prose-a:underline
-                prose-code:text-orange-300 prose-code:bg-zinc-800/60 prose-code:px-1 prose-code:rounded
-                prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-700/40
-                prose-blockquote:border-orange-500/40 prose-blockquote:text-zinc-400
-                prose-strong:text-zinc-200
-                prose-li:text-zinc-300
-                prose-table:text-sm prose-th:text-zinc-300 prose-td:text-zinc-400
-                prose-hr:border-zinc-700/40">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    img: ({ src, alt, ...props }) => (
-                      <img
-                        src={src?.replace(/^\.\/assets\//, '/assets/')}
-                        alt={alt}
-                        className="rounded-xl max-w-full"
-                        {...props}
-                      />
-                    ),
-                  }}
-                >{readmeContent}</ReactMarkdown>
-              </div>
-            </div>
+            <ReadmePanel />
           ) : activeTab === 'workflow' ? (
             <Suspense fallback={<div className="h-full flex items-center justify-center text-zinc-600 text-sm">Caricamento...</div>}>
               {openWorkflow ? (
