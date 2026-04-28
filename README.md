@@ -315,4 +315,14 @@ La configurazione viene salvata in `mcp_config.json` (ignorato da git). Copia `m
 
 ---
 
+## TODO
+
+- [ ] **macOS Quick Actions** — Integrazione nativa con l'app Shortcuts di macOS per interagire con Efesto senza aprire il frontend. Casi d'uso prioritari:
+  - Aggiungere una memoria dal tasto destro o da una scorciatoia globale
+  - Embeddizzare un file direttamente dal Finder (Quick Action sul menu contestuale)
+  - Avviare un workflow per nome senza conoscere l'ID numerico (richiede endpoint `POST /workflows/run-by-name`)
+  - Chat rapida con risposta in notifica
+
+---
+
 *Efesto — Costruisci il tuo Olimpo Digitale*
