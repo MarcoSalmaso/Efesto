@@ -9,6 +9,7 @@ const PromptLibrary   = lazy(() => import('./prompts/PromptLibrary'));
 const SimulationPanel = lazy(() => import('./simulation/SimulationPanel'));
 const MemoryPanel     = lazy(() => import('./memory/MemoryPanel'));
 const HomePage        = lazy(() => import('./home/HomePage'));
+import readmeContent from '../../README.md?raw';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -1423,8 +1424,8 @@ const App = () => {
             </div>
           </div>
 
-          {/* Impostazioni */}
-          <div className="border-t border-zinc-700/30 pt-3">
+          {/* Impostazioni + README */}
+          <div className="border-t border-zinc-700/30 pt-3 space-y-px">
             <button onClick={() => setActiveTab('settings')}
               className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
                 activeTab === 'settings' ? 'bg-orange-600/15 text-orange-400 font-medium' : 'text-zinc-500 hover:bg-zinc-700/40 hover:text-zinc-300'
@@ -1432,6 +1433,14 @@ const App = () => {
               <span className={activeTab === 'settings' ? 'text-orange-400' : 'text-zinc-600'}><Settings size={15} /></span>
               Impostazioni
               {activeTab === 'settings' && <span className="ml-auto w-1 h-4 rounded-full bg-orange-500 opacity-80" />}
+            </button>
+            <button onClick={() => setActiveTab('readme')}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+                activeTab === 'readme' ? 'bg-orange-600/15 text-orange-400 font-medium' : 'text-zinc-500 hover:bg-zinc-700/40 hover:text-zinc-300'
+              }`}>
+              <span className={activeTab === 'readme' ? 'text-orange-400' : 'text-zinc-600'}><Info size={15} /></span>
+              Documentazione
+              {activeTab === 'readme' && <span className="ml-auto w-1 h-4 rounded-full bg-orange-500 opacity-80" />}
             </button>
           </div>
         </nav>
@@ -1459,6 +1468,7 @@ const App = () => {
              activeTab === 'simulation' ? "Simulazioni" :
              activeTab === 'memory' ? "Memoria" :
              activeTab === 'workflow' ? (openWorkflow ? openWorkflow.name : "Workflow") :
+             activeTab === 'readme' ? "Documentazione" :
              "Knowledge Base"}
           </h2>
           {activeTab === 'chat' && (
@@ -1789,6 +1799,23 @@ const App = () => {
               <Suspense fallback={<div className="flex items-center justify-center py-12 text-zinc-600 text-sm">Caricamento...</div>}>
                 <McpPanel />
               </Suspense>
+            </div>
+          ) : activeTab === 'readme' ? (
+            <div className="flex-1 overflow-y-auto px-12 py-10">
+              <div className="max-w-3xl mx-auto prose prose-invert prose-zinc prose-sm
+                prose-headings:text-zinc-100 prose-headings:font-semibold
+                prose-h1:text-2xl prose-h2:text-lg prose-h2:border-b prose-h2:border-zinc-700/50 prose-h2:pb-1
+                prose-p:text-zinc-300 prose-p:leading-relaxed
+                prose-a:text-orange-400 prose-a:no-underline hover:prose-a:underline
+                prose-code:text-orange-300 prose-code:bg-zinc-800/60 prose-code:px-1 prose-code:rounded
+                prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-700/40
+                prose-blockquote:border-orange-500/40 prose-blockquote:text-zinc-400
+                prose-strong:text-zinc-200
+                prose-li:text-zinc-300
+                prose-table:text-sm prose-th:text-zinc-300 prose-td:text-zinc-400
+                prose-hr:border-zinc-700/40">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{readmeContent}</ReactMarkdown>
+              </div>
             </div>
           ) : activeTab === 'workflow' ? (
             <Suspense fallback={<div className="h-full flex items-center justify-center text-zinc-600 text-sm">Caricamento...</div>}>
