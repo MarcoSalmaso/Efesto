@@ -323,6 +323,18 @@ La configurazione viene salvata in `mcp_config.json` (ignorato da git). Copia `m
   - Avviare un workflow per nome senza conoscere l'ID numerico (richiede endpoint `POST /workflows/run-by-name`)
   - Chat rapida con risposta in notifica
 
+- [ ] **Efesto Observer — Assistente contestuale di sistema** — Processo daemon in background che osserva passivamente la macchina (clipboard, app attiva, file recenti, URL del browser via AppleScript) e costruisce un "contesto implicito" aggiornato in tempo reale. Quando si apre la chat, Efesto inietta silenziosamente il contesto rilevato nel system prompt della sessione, senza bisogno di descrivere su cosa si sta lavorando. Architettura prevista:
+  - Daemon Python separato che polling-a le fonti di sistema configurabili
+  - Canale SSE dedicato verso il backend per aggiornare il contesto attivo
+  - Inject automatico nel system prompt della prossima sessione chat
+  - Pannello "Osservazione attiva" nell'interfaccia con privacy controls granulari per tipo di fonte (clipboard, app, file, browser)
+
+- [ ] **RAG Attivo — Knowledge Base con aggiornamento automatico** — Invece di aspettare il caricamento manuale, Efesto monitora fonti configurabili (cartelle locali, feed RSS, endpoint REST, pagine web) e aggiorna la Knowledge Base in background. Ogni chunk ha un livello di "freschezza" e ogni fonte ha una policy di refresh e un filtro di rilevanza basato su embedding similarity rispetto a un "topic anchor" configurabile. Architettura prevista:
+  - Scheduler backend (APScheduler o thread) per il refresh periodico delle sorgenti
+  - Supporto a: cartelle locali (watchdog), feed RSS (feedparser), URL web (httpx + BeautifulSoup)
+  - Metadati `last_updated` e `source_url` per ogni chunk in SQLite
+  - Interfaccia "Sorgenti attive" nel pannello RAG con stato ultimo aggiornamento, frequenza di refresh e log chunk aggiunti/rimossi
+
 ---
 
 *Efesto — Costruisci il tuo Olimpo Digitale*
